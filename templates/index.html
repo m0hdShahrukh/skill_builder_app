@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,256 +9,46 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
-        /* All of your CSS from the previous step goes here */
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-
-        body {
-            font-family: 'Roboto', sans-serif;
-            margin: 0;
-            background-color: #f0f2f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        #auth-container {
-            width: 100%;
-            max-width: 400px;
-            padding: 2em;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-        }
-
-        #auth-container h2 {
-            text-align: center;
-            color: #333;
-            margin-top: 0;
-        }
-
-        .input-group {
-            margin-bottom: 1.5em;
-        }
-
-        .input-group input {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            box-sizing: border-box;
-        }
-
-        .auth-btn {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            background: #007bff;
-            color: white;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1.1em;
-            font-weight: 500;
-        }
-
-        .toggle-auth {
-            text-align: center;
-            margin-top: 1em;
-            color: #007bff;
-            cursor: pointer;
-            font-size: 0.9em;
-        }
-
-        #auth-error {
-            color: red;
-            text-align: center;
-            margin-top: 1em;
-            font-size: 0.9em;
-            min-height: 1.2em;
-        }
-
-        #main-app {
-            display: flex;
-            width: 95vw;
-            height: 95vh;
-            max-width: 1400px;
-        }
-
-        #sidebar {
-            width: 260px;
-            background: #f8f9fa;
-            border-right: 1px solid #ddd;
-            display: flex;
-            flex-direction: column;
-            padding: 1em;
-            box-sizing: border-box;
-        }
-
-        #new-chat-btn {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1em;
-            margin-bottom: 1em;
-            width: 100%;
-        }
-
-        #sidebar h2 {
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 0.5em;
-            font-size: 1.2em;
-            color: #333;
-            margin-top: 0;
-        }
-
-        #recent-chats-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            overflow-y: auto;
-            flex-grow: 1;
-        }
-
-        #recent-chats-list li {
-            padding: 12px 15px;
-            cursor: pointer;
-            border-radius: 8px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        #recent-chats-list li:hover {
-            background-color: #e9ecef;
-        }
-
-        #recent-chats-list li.active {
-            background-color: #007bff;
-            color: white;
-        }
-
-        #logout-btn {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            background: #6c757d;
-            color: white;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1em;
-            margin-top: 1em;
-        }
-
-        #chat-container {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            margin-left: 1em;
-        }
-
-        #header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #007bff;
-            color: white;
-            padding: 12px 20px;
-        }
-
-        #header h1 {
-            font-size: 1.3em;
-            margin: 0;
-            font-weight: 700;
-        }
-
-        #chatbox {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 20px;
-        }
-
-        .message-wrapper {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            margin-bottom: 12px;
-        }
-
-        .message {
-            padding: 12px 18px;
-            border-radius: 18px;
-            max-width: 80%;
-            line-height: 1.6;
-        }
-
-        .message p:first-child,
-        .message h1:first-child {
-            margin-top: 0;
-        }
-
-        .message p:last-child {
-            margin-bottom: 0;
-        }
-
-        .message ul,
-        .message ol {
-            padding-left: 20px;
-        }
-
-        .user-message {
-            background-color: #007bff;
-            color: white;
-            align-self: flex-end;
-        }
-
-        .bot-message {
-            background-color: #e9e9eb;
-            color: #333;
-            align-self: flex-start;
-        }
-
-        #input-container {
-            display: flex;
-            padding: 16px;
-            border-top: 1px solid #ddd;
-        }
-
-        #userInput {
-            flex-grow: 1;
-            border: 1px solid #ccc;
-            border-radius: 20px;
-            padding: 12px 18px;
-            font-size: 1em;
-            margin-right: 10px;
-        }
-
-        #sendButton {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 48px;
-            height: 48px;
-            font-size: 1.8em;
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
+        body { font-family: 'Roboto', sans-serif; margin: 0; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .hidden { display: none !important; }
+        #auth-container { width: 100%; max-width: 400px; padding: 2em; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        #auth-container h2 { text-align: center; color: #333; margin-top: 0; }
+        .input-group { margin-bottom: 1.5em; }
+        .input-group input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+        .auth-btn { width: 100%; padding: 12px; border: none; background: #007bff; color: white; border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: 500;}
+        .toggle-auth { text-align: center; margin-top: 1em; color: #007bff; cursor: pointer; font-size: 0.9em;}
+        #auth-error { color: red; text-align: center; margin-top: 1em; font-size: 0.9em; min-height: 1.2em; }
+        #main-app { display: flex; width: 95vw; height: 95vh; max-width: 1400px; }
+        #sidebar { width: 260px; background: #f8f9fa; border-right: 1px solid #ddd; display: flex; flex-direction: column; padding: 1em; box-sizing: border-box;}
+        #new-chat-btn { background: #007bff; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 1em; margin-bottom: 1em; width: 100%;}
+        #sidebar h2 { border-bottom: 1px solid #ccc; padding-bottom: 0.5em; font-size: 1.2em; color: #333; margin: 1em 0 0.5em 0;}
+        #sidebar hr { width: 100%; border: none; border-top: 1px solid #ddd; margin: 1em 0;}
+        .sidebar-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; }
+        #recent-chats-list { flex-grow: 1; }
+        .sidebar-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; cursor: pointer; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.95em;}
+        .sidebar-list li:hover { background-color: #e9ecef; }
+        .sidebar-list li.active { background-color: #007bff; color: white; }
+        .delete-btn { background: none; border: none; color: #888; cursor: pointer; padding: 4px; border-radius: 4px; display: none; font-size: 1.1em; }
+        .sidebar-list li:hover .delete-btn { display: inline-block; }
+        .sidebar-list li.active .delete-btn { color: white; }
+        #logout-btn { width: 100%; padding: 12px; border: none; background: #6c757d; color: white; border-radius: 8px; cursor: pointer; font-size: 1em; margin-top: 1em;}
+        #chat-container { flex-grow: 1; display: flex; flex-direction: column; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden; margin-left: 1em;}
+        #header { display: flex; justify-content: space-between; align-items: center; background: #007bff; color: white; padding: 12px 20px; }
+        #header h1 { font-size: 1.3em; margin: 0; font-weight: 700; }
+        #chatbox { flex-grow: 1; overflow-y: auto; padding: 20px; }
+        .message-wrapper { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+        .message { padding: 12px 18px; border-radius: 18px; max-width: 80%; line-height: 1.6; }
+        .message p:first-child, .message h1:first-child { margin-top: 0; }
+        .message p:last-child { margin-bottom: 0; }
+        .message ul, .message ol { padding-left: 20px; }
+        .user-message { background-color: #007bff; color: white; align-self: flex-end; }
+        .bot-message { background-color: #e9e9eb; color: #333; align-self: flex-start; }
+        #input-container { display: flex; padding: 16px; border-top: 1px solid #ddd; }
+        #userInput { flex-grow: 1; border: 1px solid #ccc; border-radius: 20px; padding: 12px 18px; font-size: 1em; margin-right: 10px; }
+        #sendButton { background-color: #007bff; color: white; border: none; border-radius: 50%; width: 48px; height: 48px; font-size: 1.8em; cursor: pointer; display: flex; justify-content: center; align-items: center;}
     </style>
 </head>
-
 <body>
 
     <div id="auth-container">
@@ -274,8 +63,7 @@
         <div id="signup-form" class="hidden">
             <h2>Sign Up</h2>
             <div class="input-group"><input type="email" id="signup-email" placeholder="Email"></div>
-            <div class="input-group"><input type="password" id="signup-password"
-                    placeholder="Password (min. 6 characters)"></div>
+            <div class="input-group"><input type="password" id="signup-password" placeholder="Password (min. 6 characters)"></div>
             <button id="signup-btn" class="auth-btn">Sign Up</button>
             <p class="toggle-auth" onclick="toggleAuthForms()">Already have an account? Login</p>
         </div>
@@ -285,17 +73,22 @@
         <div id="sidebar">
             <button id="new-chat-btn">➕ New Chat</button>
             <hr>
-            <h2>Recent Chats</h2>
-            <ul id="recent-chats-list"></ul>
+            <div class="sidebar-section">
+                <h2>AI Models</h2>
+                <ul id="ai-models-list" class="sidebar-list">
+                    <li data-model-id="how_to_expert" class="active">🧑‍🏫 How-To Expert</li>
+                    <li data-model-id="social_media_helper">📱 Social Media Helper</li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
+                <h2>Recent Chats</h2>
+                <ul id="recent-chats-list" class="sidebar-list"></ul>
+            </div>
             <button id="logout-btn">Logout</button>
         </div>
         <div id="chat-container">
-            <div id="header">
-                <h1>AI Assistant</h1>
-            </div>
-            <div id="chatbox">
-                <p style="text-align:center; color: #888;">Select a chat or start a new one.</p>
-            </div>
+            <div id="header"><h1>How-To Expert</h1></div>
+            <div id="chatbox"><p style="text-align:center; color: #888;">Select a chat or start a new one.</p></div>
             <div id="input-container">
                 <input type="text" id="userInput" placeholder="Ask me anything...">
                 <button id="sendButton">➤</button>
@@ -316,7 +109,6 @@
         };
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
-        const db = firebase.firestore();
 
         // --- DOM ELEMENTS ---
         const authContainer = document.getElementById('auth-container');
@@ -332,9 +124,11 @@
         const logoutBtn = document.getElementById('logout-btn');
         const loginBtn = document.getElementById('login-btn');
         const signupBtn = document.getElementById('signup-btn');
-
+        const aiModelsList = document.getElementById('ai-models-list');
+        
         // --- GLOBAL STATE ---
         let currentChatId = null;
+        let currentModelId = 'how_to_expert';
 
         // --- AUTH STATE LISTENER ---
         auth.onAuthStateChanged(user => {
@@ -347,7 +141,7 @@
                 mainApp.classList.add('hidden');
             }
         });
-
+        
         // --- AUTH FUNCTIONS ---
         function toggleAuthForms() {
             loginForm.classList.toggle('hidden');
@@ -355,27 +149,18 @@
             authError.textContent = '';
             authError.classList.add('hidden');
         }
-
         signupBtn.addEventListener('click', () => {
             const email = document.getElementById('signup-email').value;
             const password = document.getElementById('signup-password').value;
-            auth.createUserWithEmailAndPassword(email, password).catch(error => {
-                authError.textContent = error.message;
-                authError.classList.remove('hidden');
-            });
+            auth.createUserWithEmailAndPassword(email, password).catch(error => { authError.textContent = error.message; authError.classList.remove('hidden'); });
         });
-
         loginBtn.addEventListener('click', () => {
             const email = document.getElementById('login-email').value;
             const password = document.getElementById('login-password').value;
-            auth.signInWithEmailAndPassword(email, password).catch(error => {
-                authError.textContent = error.message;
-                authError.classList.remove('hidden');
-            });
+            auth.signInWithEmailAndPassword(email, password).catch(error => { authError.textContent = error.message; authError.classList.remove('hidden'); });
         });
-
         logoutBtn.addEventListener('click', () => auth.signOut());
-
+        
         // --- CHAT FUNCTIONS ---
         async function loadRecentChats() {
             if (!auth.currentUser) return;
@@ -387,13 +172,23 @@
                 if (Array.isArray(chats)) {
                     chats.forEach(chat => {
                         const li = document.createElement('li');
-                        li.textContent = chat.title;
                         li.dataset.chatId = chat.id;
                         if (chat.id === currentChatId) li.classList.add('active');
+                        
+                        const titleSpan = document.createElement('span');
+                        titleSpan.textContent = chat.title;
+                        
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'delete-btn';
+                        deleteBtn.innerHTML = '🗑️';
+                        deleteBtn.title = 'Delete Chat';
+                        
+                        li.appendChild(titleSpan);
+li.appendChild(deleteBtn);
                         recentChatsList.appendChild(li);
                     });
                 }
-            } catch (e) { console.error("Could not load recent chats", e); }
+            } catch(e) { console.error("Could not load recent chats", e); }
         }
 
         async function loadChat(chatId) {
@@ -426,22 +221,44 @@
             });
         }
 
+        async function deleteChat(chatId, chatElement) {
+            if (!confirm("Are you sure you want to delete this chat?")) return;
+            
+            const token = await auth.currentUser.getIdToken();
+            try {
+                const response = await fetch(`/api/delete-chat/${chatId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Failed to delete chat on server.');
+                
+                chatElement.remove();
+                if (currentChatId === chatId) {
+                    chatbox.innerHTML = '<p style="text-align:center; color: #888;">Select a chat or start a new one.</p>';
+                    currentChatId = null;
+                }
+            } catch (error) {
+                console.error("Error deleting chat:", error);
+                alert("Could not delete chat.");
+            }
+        }
+        
         async function sendMessage() {
             const messageText = userInput.value;
             if (!messageText.trim() || !auth.currentUser) return;
             if (!currentChatId) {
-                alert("Please select a chat or start a new one first.");
+                alert("Please start a new chat before sending a message.");
                 return;
             }
-            if (chatbox.querySelector('p')) chatbox.innerHTML = '';
+            if(chatbox.querySelector('p')) chatbox.innerHTML = '';
             appendMessage(messageText, 'user-message', true);
             userInput.value = '';
-
+            
             const token = await auth.currentUser.getIdToken();
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ message: messageText, chatId: currentChatId })
+                body: JSON.stringify({ message: messageText, chatId: currentChatId, modelId: currentModelId })
             });
             const data = await response.json();
             appendMessage(data.response, 'bot-message', true);
@@ -461,16 +278,30 @@
             if (shouldScroll) chatbox.scrollTop = chatbox.scrollHeight;
         }
 
+        // --- EVENT LISTENERS ---
         sendButton.addEventListener('click', sendMessage);
         userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
         newChatBtn.addEventListener('click', createNewChat);
+
         recentChatsList.addEventListener('click', (e) => {
-            if (e.target && e.target.tagName === 'LI') {
-                const chatId = e.target.dataset.chatId;
-                if (chatId !== currentChatId) loadChat(chatId);
+            const li = e.target.closest('li');
+            if (!li) return;
+            if (e.target.classList.contains('delete-btn')) {
+                deleteChat(li.dataset.chatId, li);
+            } else {
+                if(li.dataset.chatId !== currentChatId) loadChat(li.dataset.chatId);
+            }
+        });
+
+        aiModelsList.addEventListener('click', (e) => {
+            const li = e.target.closest('li');
+            if (li && li.dataset.modelId) {
+                currentModelId = li.dataset.modelId;
+                document.querySelectorAll('#ai-models-list li').forEach(item => item.classList.remove('active'));
+                li.classList.add('active');
+                document.querySelector('#header h1').textContent = li.textContent.trim();
             }
         });
     </script>
 </body>
-
 </html>
