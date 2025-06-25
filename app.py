@@ -1,8 +1,7 @@
 import os
 import json
 import uuid
-import google.generativeai as genai
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template # render_template is crucial
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
 from datetime import datetime, timezone
@@ -47,16 +46,19 @@ def get_user_id_from_token(request):
         return None, ({"error": f"Invalid token: {e}"}, 401)
 
 # --- API Endpoints ---
+
+# <<< --- THIS IS THE FIX --- >>>
+# The root route MUST serve your main application file.
 @app.route("/")
 def home():
-    # This route is now just for Render's health checks. The app is served by index.html.
-    return "OK", 200
+    """Serves the main index.html file."""
+    return render_template("index.html")
 
 @app.route("/api/new-chat", methods=['POST'])
 def new_chat():
     """Creates a new, empty chat document in Firestore for the user."""
     uid, error = get_user_id_from_token(request)
-    if error: return error
+    if error: return jsonify(error[0]), error[1]
 
     chat_id = str(uuid.uuid4())
     chat_data = {
@@ -72,7 +74,7 @@ def new_chat():
 def get_recent_chats():
     """Gets a list of all chats for the logged-in user."""
     uid, error = get_user_id_from_token(request)
-    if error: return error
+    if error: return jsonify(error[0]), error[1]
     
     chats_ref = db.collection('chats').where('userId', '==', uid).order_by('createdAt', direction=firestore.Query.DESCENDING).limit(20)
     chats = [{"id": doc.id, "title": doc.to_dict().get("title", "Untitled")} for doc in chats_ref.stream()]
@@ -82,7 +84,7 @@ def get_recent_chats():
 def get_chat(chat_id):
     """Gets the full message history for a specific chat."""
     uid, error = get_user_id_from_token(request)
-    if error: return error
+    if error: return jsonify(error[0]), error[1]
 
     chat_ref = db.collection('chats').document(chat_id)
     chat_doc = chat_ref.get()
@@ -96,7 +98,7 @@ def get_chat(chat_id):
 def chat():
     """Handles sending a message to a specific chat."""
     uid, error = get_user_id_from_token(request)
-    if error: return error
+    if error: return jsonify(error[0]), error[1]
 
     data = request.json
     user_message = data.get("message")
@@ -111,14 +113,12 @@ def chat():
     if not chat_doc.exists or chat_doc.to_dict().get('userId') != uid:
         return jsonify({"error": "Chat not found or access denied"}), 404
 
-    # --- Gemini API Call ---
     # The actual API call logic can be expanded here with different system prompts
     prompt = f"User asks: {user_message}"
     try:
         response = model.generate_content(prompt)
         bot_response = response.text
         
-        # Append messages to history in Firestore
         chat_ref.update({
             'messages': firestore.ArrayUnion([
                 {"role": "user", "text": user_message},
@@ -126,7 +126,6 @@ def chat():
             ])
         })
         
-        # Auto-generate a title for the chat if it's new
         messages_count = len(chat_doc.to_dict().get('messages', []))
         if messages_count == 0:
             title_prompt = f"Generate a very short, clever title (4 words max) for a conversation that starts with this user message: '{user_message}'"
