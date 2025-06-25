@@ -1,15 +1,33 @@
 import os
+import json
 import google.generativeai as genai
 from flask import Flask, request, render_template, session
+import firebase_admin
+from firebase_admin import credentials, auth, firestore
 
+# --- Firebase Admin SDK Initialization ---
+try:
+    # Get the JSON credentials from the environment variable
+    creds_json_str = os.environ.get('FIREBASE_CREDS_JSON')
+    if not creds_json_str:
+        raise ValueError("FIREBASE_CREDS_JSON environment variable not set.")
+
+    creds_dict = json.loads(creds_json_str)
+    cred = credentials.Certificate(creds_dict)
+    firebase_admin.initialize_app(cred)
+    db = firestore.client()
+    print("Firebase Admin SDK initialized successfully.")
+except Exception as e:
+    print(f"Error initializing Firebase Admin SDK: {e}")
+    db = None
+
+# --- Flask App Initialization ---
 app = Flask(__name__)
-
-# Set secret key from environment variable
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 if not app.config['SECRET_KEY']:
     raise ValueError("No SECRET_KEY set for Flask application")
 
-# Configure Gemini API
+# --- Gemini API Initialization ---
 try:
     genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
     model = genai.GenerativeModel('gemini-1.5-flash')
@@ -17,55 +35,90 @@ except (AttributeError, ValueError) as e:
     print(f"Gemini API Key error: {e}")
     model = None
 
-# This is the bot's core "personality"
 SYSTEM_INSTRUCTION = """
-You are a 'Visual How-To' assistant. Your goal is to provide instructions that are exceptionally clear, visually appealing, and easy to understand at a glance. When a user asks how to do something, you must format your response using Markdown with the following strict structure:
-
-1.  **Main Title:** Start with a clear, bold title for the task, using a relevant emoji. For example: "🍳 **How to Make a Perfect Omelette**".
-
-2.  **Summary:** Provide a brief, one-sentence summary of the task.
-
-3.  **Ingredients/Tools Section:** Use the heading "📋 **What You'll Need**". List each item on a new line starting with a bullet point (`*`) and making the item name **bold**.
-
-4.  **Instructions Section:** Use the heading "📝 **Step-by-Step Guide**". List each step using **numbers** and **bold** the key action of each step.
-
-5.  **Pro-Tip Section:** Use the heading "💡 **Pro-Tip**". Provide one useful, optional tip.
-
-Ensure there is a blank line between each section to create clear visual separation.
+You are a 'Visual How-To' assistant... 
+(Your detailed prompt from the previous step goes here. I've shortened it for brevity.)
 """
 
 @app.route("/")
 def home():
-    # Clear session history when the user lands on the page for the first time
-    session.clear()
     return render_template("index.html")
 
-@app.route("/new-chat", methods=['GET'])
-def new_chat():
-    # Endpoint to clear the session for the "New Chat" button
-    session.clear()
-    return "Session cleared", 200
-
+# This is our new, secure chat endpoint
 @app.route("/chat", methods=["POST"])
 def chat():
-    if model is None:
-        return {"response": "Error: The application is not configured correctly. Missing API Key."}, 500
+    # --- Authentication Check ---
+    id_token = request.headers.get('Authorization', '').split('Bearer ')[-1]
+    if not id_token:
+        return {"error": "Authorization token not provided."}, 401
 
+    try:
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+    except Exception as e:
+        print(f"Token verification failed: {e}")
+        return {"error": "Invalid or expired token."}, 401
+
+    # --- Main Logic ---
     user_message = request.json.get("message")
     if not user_message:
-        return {"response": "Error: No message received."}, 400
+        return {"error": "No message received."}, 400
 
-    # We will use the session to store history for potential follow-up questions
-    chat_history = session.get('history', [])
-    
-    # We create a self-contained prompt for this model version
+    # Get chat history from Firestore
+    chat_ref = db.collection('chats').document(uid)
+    chat_doc = chat_ref.get()
+
+    if chat_doc.exists:
+        chat_history = chat_doc.to_dict().get('messages', [])
+    else:
+        chat_history = []
+
     prompt = f"{SYSTEM_INSTRUCTION}\n\nUser Question: {user_message}"
 
     try:
         response = model.generate_content(prompt)
-        # We don't need to save history for this simple one-shot model, but the structure is here if we want to
-        return {"response": response.text}
-    
+        bot_response = response.text
+
+        # Save new messages to history
+        chat_history.append({"role": "user", "text": user_message})
+        chat_history.append({"role": "bot", "text": bot_response})
+
+        # Update the document in Firestore
+        chat_ref.set({"messages": chat_history}, merge=True)
+
+        return {"response": bot_response}
     except Exception as e:
         print(f"An error occurred during API call: {e}")
-        return {"response": "Sorry, I encountered an error. Please try again later."}, 500
+        return {"response": "Sorry, an error occurred."}, 500
+
+# New endpoint to fetch history
+@app.route("/get-history", methods=['GET'])
+def get_history():
+    id_token = request.headers.get('Authorization', '').split('Bearer ')[-1]
+    if not id_token:
+        return {"error": "Authorization token not provided."}, 401
+    try:
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+
+        chat_ref = db.collection('chats').document(uid)
+        chat_doc = chat_ref.get()
+        if chat_doc.exists:
+            return {"history": chat_doc.to_dict().get('messages', [])}
+        else:
+            return {"history": []}
+    except Exception as e:
+        return {"error": f"An error occurred: {e}"}, 401
+
+@app.route("/new-chat", methods=['GET'])
+def new_chat():
+    id_token = request.headers.get('Authorization', '').split('Bearer ')[-1]
+    if not id_token: return "Unauthorized", 401
+    try:
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        # In Phase 3, we will create a NEW chat doc. For now, we just clear the old one.
+        db.collection('chats').document(uid).delete()
+        return "Session cleared", 200
+    except Exception:
+        return "Unauthorized", 401

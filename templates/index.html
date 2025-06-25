@@ -1,164 +1,104 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skill Builder Bot</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-        body {
-            font-family: 'Roboto', sans-serif; margin: 0; background-color: #f0f2f5;
-            display: flex; justify-content: center; align-items: center; height: 100vh;
-        }
-        #chat-container {
-            width: 95%; max-width: 800px; height: 90vh; background-color: white;
-            border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-            display: flex; flex-direction: column; overflow: hidden;
-        }
-        #header {
-            display: flex; justify-content: space-between; align-items: center;
-            background-color: #007bff; color: white; padding: 12px 20px;
-        }
-        #header h1 { font-size: 1.3em; margin: 0; font-weight: 700; }
-        #new-chat-btn {
-            background-color: #ffffff33; color: white; border: none; border-radius: 8px;
-            padding: 8px 12px; font-weight: 500; cursor: pointer;
-        }
-        #chatbox {
-            flex-grow: 1; overflow-y: auto; padding: 20px;
-        }
-        .message-wrapper { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-        .message { padding: 12px 18px; border-radius: 18px; max-width: 80%; line-height: 1.6; }
-        .message h1, .message h2, .message h3 { margin-top: 0; }
-        .message ul, .message ol { padding-left: 20px; }
-        .user-message { background-color: #007bff; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
-        .bot-message { background-color: #e9e9eb; color: #333; align-self: flex-start; border-bottom-left-radius: 4px; position: relative;}
-        .copy-btn {
-            position: absolute; top: 8px; right: 8px; background: #cccccc99; border: none;
-            border-radius: 4px; cursor: pointer; opacity: 0; transition: opacity 0.2s;
-        }
-        .message-wrapper:hover .copy-btn { opacity: 1; }
-        #example-prompts { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 20px 12px; }
-        .prompt-chip {
-            background: #e0e0e0; padding: 8px 12px; border-radius: 16px;
-            cursor: pointer; font-size: 0.9em; transition: background-color 0.2s;
-        }
-        .prompt-chip:hover { background-color: #d0d0d0; }
-        #input-container { display: flex; padding: 16px; border-top: 1px solid #ddd; }
-        #userInput {
-            flex-grow: 1; border: 1px solid #ccc; border-radius: 20px;
-            padding: 12px 18px; font-size: 1em; margin-right: 10px;
-        }
-        #userInput:focus { outline: none; border-color: #007bff; }
-        #sendButton {
-            background-color: #007bff; color: white; border: none; border-radius: 50%;
-            width: 48px; height: 48px; font-size: 1.8em; cursor: pointer;
-            display: flex; justify-content: center; align-items: center;
-        }
-    </style>
-</head>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    </head>
 <body>
-    <div id="chat-container">
-        <div id="header">
-            <h1>Skill Builder Bot</h1>
-            <button id="new-chat-btn">New Chat</button>
-        </div>
-        <div id="chatbox">
-            </div>
-        <div id="example-prompts">
-            <div class="prompt-chip">How to tie a tie</div>
-            <div class="prompt-chip">How to bake cookies</div>
-            <div class="prompt-chip">Explain black holes</div>
-        </div>
-        <div id="input-container">
-            <input type="text" id="userInput" placeholder="Ask me how to do anything...">
-            <button id="sendButton">➤</button>
-        </div>
-    </div>
-
     <script>
-        const userInput = document.getElementById('userInput');
-        const chatbox = document.getElementById('chatbox');
-        const sendButton = document.getElementById('sendButton');
-        const newChatBtn = document.getElementById('new-chat-btn');
-        const examplePrompts = document.getElementById('example-prompts');
+        // --- FIREBASE SETUP ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAltzbYKC1gTOoysYmCwb5_2_xYPQJglfI",
+            authDomain: "chatbot-ai-7e89e.firebaseapp.com",
+            projectId: "chatbot-ai-7e89e",
+            storageBucket: "chatbot-ai-7e89e.firebasestorage.app",
+            messagingSenderId: "381525150560",
+            appId: "1:381525150560:web:a03a5f85bac184236d6c05",
+            measurementId: "G-2PFEW30KN6"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore(); // Initialize Firestore
 
+        // --- DOM ELEMENTS --- (from before)
+
+        // --- AUTH STATE LISTENER ---
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                authContainer.classList.add('hidden');
+                mainApp.classList.remove('hidden');
+                loadChatHistory(); // Load history on login
+            } else {
+                authContainer.classList.remove('hidden');
+                mainApp.classList.add('hidden');
+            }
+        });
+
+        // --- NEW: Function to load history ---
+        async function loadChatHistory() {
+            chatbox.innerHTML = ''; // Clear the chatbox first
+            const token = await auth.currentUser.getIdToken();
+            try {
+                const response = await fetch('/get-history', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.history) {
+                    data.history.forEach(msg => {
+                        const className = msg.role === 'user' ? 'user-message' : 'bot-message';
+                        const messageDiv = appendMessage(msg.text, className);
+                        if (className === 'bot-message') {
+                            addCopyButton(messageDiv);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load history:', error);
+            }
+        }
+        
+        // --- UPDATED: sendMessage function ---
         async function sendMessage(messageText) {
             if (!messageText || messageText.trim() === '') return;
             appendMessage(messageText, 'user-message');
             userInput.value = '';
-            examplePrompts.style.display = 'none'; // Hide examples after chat starts
             
-            const loadingIndicator = appendMessage('...', 'bot-message');
-            loadingIndicator.innerHTML = '<div class="spinner"></div>'; // You can add a CSS spinner here
+            const token = await auth.currentUser.getIdToken(); // Get auth token
 
             try {
                 const response = await fetch('/chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` // Send token for verification
+                    },
                     body: JSON.stringify({ message: messageText })
                 });
                 if (!response.ok) throw new Error(`Server error: ${response.status}`);
                 const data = await response.json();
                 
-                // THIS IS THE FIX: use marked.parse to translate markdown to HTML
-                loadingIndicator.innerHTML = marked.parse(data.response);
-                addCopyButton(loadingIndicator); // Add copy button to the final message
+                const botMessageDiv = appendMessage(data.response, 'bot-message');
+                addCopyButton(botMessageDiv);
             } catch (error) {
-                loadingIndicator.innerHTML = "Oops! Something went wrong. Please try again.";
+                appendMessage("Oops! Something went wrong.", 'bot-message');
                 console.error("Error:", error);
             }
         }
 
         function appendMessage(text, className) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'message-wrapper';
-            
-            const messageDiv = document.createElement('div');
-            messageDiv.classList.add('message', className);
-            
-            // Here we use innerHTML because we TRUST marked.js to sanitize the input
-            messageDiv.innerHTML = marked.parse(text);
-
-            wrapper.appendChild(messageDiv);
-            chatbox.appendChild(wrapper);
-            chatbox.scrollTop = chatbox.scrollHeight;
-            return messageDiv;
+            // ... same appendMessage function as before ...
         }
-        
         function addCopyButton(botMessageElement) {
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'copy-btn';
-            copyBtn.innerHTML = '📋';
-            copyBtn.onclick = () => {
-                navigator.clipboard.writeText(botMessageElement.innerText);
-                copyBtn.innerHTML = '✅';
-                setTimeout(() => { copyBtn.innerHTML = '📋'; }, 2000);
-            };
-            botMessageElement.parentNode.appendChild(copyBtn);
+            // ... same addCopyButton function as before ...
         }
 
-        // Event Listeners
-        sendButton.addEventListener('click', () => sendMessage(userInput.value));
-        userInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage(userInput.value);
-        });
-        
+        // --- UPDATED: newChatBtn listener ---
         newChatBtn.addEventListener('click', async () => {
-            await fetch('/new-chat');
-            chatbox.innerHTML = '';
-            examplePrompts.style.display = 'flex';
+            const token = await auth.currentUser.getIdToken();
+            await fetch('/new-chat', { headers: { 'Authorization': `Bearer ${token}` } });
+            chatbox.innerHTML = ''; // Visually clear the chat
         });
         
-        examplePrompts.addEventListener('click', (e) => {
-            if (e.target.classList.contains('prompt-chip')) {
-                const promptText = e.target.innerText;
-                userInput.value = promptText;
-                sendMessage(promptText);
-            }
-        });
-
+        // ... all other listeners and functions from before ...
     </script>
 </body>
 </html>
