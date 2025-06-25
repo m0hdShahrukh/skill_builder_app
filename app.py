@@ -2,7 +2,8 @@ import google.generativeai as genai
 from flask import Flask, request
 
 # Put your magic key here
-genai.configure(api_key="AIzaSyCs-7gUynPCkomhUTyNWwUmZpn4mcSqzaI")
+import os
+genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
 
 # This is the robot's brain model
 model = genai.GenerativeModel('gemini-pro')
