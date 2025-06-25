@@ -1,18 +1,23 @@
 import os
 import json
+import uuid
 import google.generativeai as genai
-from flask import Flask, request, render_template, session
+from flask import Flask, request, jsonify
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
+from datetime import datetime, timezone
 
-# --- Firebase Admin SDK Initialization ---
-# This part is critical for your backend to securely communicate with Firebase
+# --- Initialization ---
+# Initialize Flask App
+app = Flask(__name__)
+app_secret_key = os.environ.get('SECRET_KEY')
+if not app_secret_key:
+    raise ValueError("No SECRET_KEY set for Flask application.")
+app.config['SECRET_KEY'] = app_secret_key
+
+# Initialize Firebase Admin SDK
 try:
-    # Get the JSON credentials from the environment variable on Render
     creds_json_str = os.environ.get('FIREBASE_CREDS_JSON')
-    if not creds_json_str:
-        raise ValueError("FIREBASE_CREDS_JSON environment variable not set. Please check Render setup.")
-    
     creds_dict = json.loads(creds_json_str)
     cred = credentials.Certificate(creds_dict)
     firebase_admin.initialize_app(cred)
@@ -22,15 +27,7 @@ except Exception as e:
     print(f"FATAL ERROR: Could not initialize Firebase Admin SDK: {e}")
     db = None
 
-# --- Flask App Initialization ---
-app = Flask(__name__)
-# Get the secret key from environment variables
-app_secret_key = os.environ.get('SECRET_KEY')
-if not app_secret_key:
-    raise ValueError("No SECRET_KEY set for Flask application. Please set it in Render.")
-app.config['SECRET_KEY'] = app_secret_key
-
-# --- Gemini API Initialization ---
+# Initialize Gemini API
 try:
     genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
     model = genai.GenerativeModel('gemini-1.5-flash')
@@ -38,95 +35,108 @@ except Exception as e:
     print(f"Gemini API Key error: {e}")
     model = None
 
-# --- BOT's Core Personality ---
-SYSTEM_INSTRUCTION = """
-You are a 'Visual How-To' assistant. Your goal is to provide instructions that are exceptionally clear, visually appealing, and easy to understand at a glance.
-
-When a user asks how to do something, you must format your response using Markdown with the following strict structure:
-
-1.  **Main Title:** Start with a clear, bold title for the task, using a relevant emoji. For example: "🍳 **How to Make a Perfect Omelette**".
-
-2.  **Summary:** Provide a brief, one-sentence summary of the task.
-
-3.  **Ingredients/Tools Section:**
-    * Use the heading "📋 **What You'll Need**".
-    * List each item (ingredient or tool) on a new line.
-    * Start each item with a bullet point (`*`).
-    * Make the name of the item **bold**. For example: `* **2-3 Large Eggs**`
-
-4.  **Instructions Section:**
-    * Use the heading "📝 **Step-by-Step Guide**".
-    * List each step using **numbers**.
-    * **Bold** the key action of each step. For example: `1. **Crack** the eggs into a bowl...`
-    * Keep the text for each step concise and clear.
-
-5.  **Pro-Tip Section:**
-    * Use the heading "💡 **Pro-Tip**".
-    * Provide one useful, optional tip to help the user get an even better result.
-
-Ensure there is a blank line between each section to create clear visual separation. The final output should be clean, structured, and very easy to read.
-"""
-
-@app.route("/")
-def home():
-    return render_template("index.html")
-
-# Helper function to get user ID from token
+# --- Helper Functions ---
 def get_user_id_from_token(request):
+    """Verifies Firebase ID token and returns UID."""
     id_token = request.headers.get('Authorization', '').split('Bearer ')[-1]
     if not id_token:
         return None, ({"error": "Authorization token not provided."}, 401)
     try:
-        decoded_token = auth.verify_id_token(id_token)
-        return decoded_token['uid'], None
+        return auth.verify_id_token(id_token)['uid'], None
     except Exception as e:
-        print(f"Token verification failed: {e}")
-        return None, ({"error": "Invalid or expired token."}, 401)
+        return None, ({"error": f"Invalid token: {e}"}, 401)
 
-@app.route("/chat", methods=["POST"])
-def chat():
+# --- API Endpoints ---
+@app.route("/")
+def home():
+    # This route is now just for Render's health checks. The app is served by index.html.
+    return "OK", 200
+
+@app.route("/api/new-chat", methods=['POST'])
+def new_chat():
+    """Creates a new, empty chat document in Firestore for the user."""
     uid, error = get_user_id_from_token(request)
     if error: return error
 
-    user_message = request.json.get("message")
-    if not user_message: return {"error": "No message received."}, 400
+    chat_id = str(uuid.uuid4())
+    chat_data = {
+        "userId": uid,
+        "title": "New Chat",
+        "createdAt": datetime.now(timezone.utc),
+        "messages": []
+    }
+    db.collection('chats').document(chat_id).set(chat_data)
+    return jsonify({"chatId": chat_id, "title": "New Chat"})
+
+@app.route("/api/get-recent-chats", methods=['GET'])
+def get_recent_chats():
+    """Gets a list of all chats for the logged-in user."""
+    uid, error = get_user_id_from_token(request)
+    if error: return error
     
-    # Use a single document per user for simplicity in this phase
-    chat_ref = db.collection('chats').document(uid)
+    chats_ref = db.collection('chats').where('userId', '==', uid).order_by('createdAt', direction=firestore.Query.DESCENDING).limit(20)
+    chats = [{"id": doc.id, "title": doc.to_dict().get("title", "Untitled")} for doc in chats_ref.stream()]
+    return jsonify(chats)
+
+@app.route("/api/get-chat/<chat_id>", methods=['GET'])
+def get_chat(chat_id):
+    """Gets the full message history for a specific chat."""
+    uid, error = get_user_id_from_token(request)
+    if error: return error
+
+    chat_ref = db.collection('chats').document(chat_id)
     chat_doc = chat_ref.get()
-    
-    chat_history = chat_doc.to_dict().get('messages', []) if chat_doc.exists else []
-    prompt = f"{SYSTEM_INSTRUCTION}\n\nUser Question: {user_message}"
-    
+
+    if not chat_doc.exists or chat_doc.to_dict().get('userId') != uid:
+        return jsonify({"error": "Chat not found or access denied"}), 404
+        
+    return jsonify(chat_doc.to_dict())
+
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    """Handles sending a message to a specific chat."""
+    uid, error = get_user_id_from_token(request)
+    if error: return error
+
+    data = request.json
+    user_message = data.get("message")
+    chat_id = data.get("chatId")
+
+    if not all([user_message, chat_id]):
+        return jsonify({"error": "Message and chatId are required."}), 400
+
+    chat_ref = db.collection('chats').document(chat_id)
+    chat_doc = chat_ref.get()
+
+    if not chat_doc.exists or chat_doc.to_dict().get('userId') != uid:
+        return jsonify({"error": "Chat not found or access denied"}), 404
+
+    # --- Gemini API Call ---
+    # The actual API call logic can be expanded here with different system prompts
+    prompt = f"User asks: {user_message}"
     try:
         response = model.generate_content(prompt)
         bot_response = response.text
         
-        chat_history.append({"role": "user", "text": user_message})
-        chat_history.append({"role": "bot", "text": bot_response})
+        # Append messages to history in Firestore
+        chat_ref.update({
+            'messages': firestore.ArrayUnion([
+                {"role": "user", "text": user_message},
+                {"role": "bot", "text": bot_response}
+            ])
+        })
         
-        chat_ref.set({"messages": chat_history}, merge=True)
-        return {"response": bot_response}
+        # Auto-generate a title for the chat if it's new
+        messages_count = len(chat_doc.to_dict().get('messages', []))
+        if messages_count == 0:
+            title_prompt = f"Generate a very short, clever title (4 words max) for a conversation that starts with this user message: '{user_message}'"
+            title_response = model.generate_content(title_prompt)
+            new_title = title_response.text.strip().replace('"', '')
+            chat_ref.update({"title": new_title})
+        
+        return jsonify({"response": bot_response})
     except Exception as e:
-        print(f"API call error: {e}")
-        return {"response": "Sorry, an error occurred while contacting the AI."}, 500
-        
-@app.route("/get-history", methods=['GET'])
-def get_history():
-    uid, error = get_user_id_from_token(request)
-    if error: return error
-    
-    chat_doc = db.collection('chats').document(uid).get()
-    if chat_doc.exists:
-        return {"history": chat_doc.to_dict().get('messages', [])}
-    else:
-        return {"history": []}
+        return jsonify({"error": f"An error occurred: {e}"}), 500
 
-@app.route("/new-chat", methods=['GET'])
-def new_chat():
-    uid, error = get_user_id_from_token(request)
-    if error: return error
-    
-    # In Phase 3, this will create a new chat entry. For now, it deletes the one chat history doc.
-    db.collection('chats').document(uid).delete()
-    return "Session cleared", 200
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
