@@ -6,7 +6,7 @@ from flask import Flask, request, render_template
 # Your secret key is now read from the hosting environment
 genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
 
-model = genai.GenerativeModel('gemini-pro')
+model = genai.GenerativeModel('gemini-1.5-flash')
 app = Flask(__name__)
 
 # This is the NEW part that shows your website's front page
