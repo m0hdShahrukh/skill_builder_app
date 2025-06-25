@@ -1,20 +1,20 @@
 import os
 import json
 import uuid
-from flask import Flask, request, jsonify, render_template # render_template is crucial
+# THIS LINE WAS MISSING. THIS FIXES THE BACKEND BUG.
+import google.generativeai as genai
+from flask import Flask, request, jsonify, render_template
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
 from datetime import datetime, timezone
 
 # --- Initialization ---
-# Initialize Flask App
 app = Flask(__name__)
 app_secret_key = os.environ.get('SECRET_KEY')
 if not app_secret_key:
     raise ValueError("No SECRET_KEY set for Flask application.")
 app.config['SECRET_KEY'] = app_secret_key
 
-# Initialize Firebase Admin SDK
 try:
     creds_json_str = os.environ.get('FIREBASE_CREDS_JSON')
     creds_dict = json.loads(creds_json_str)
@@ -26,17 +26,18 @@ except Exception as e:
     print(f"FATAL ERROR: Could not initialize Firebase Admin SDK: {e}")
     db = None
 
-# Initialize Gemini API
 try:
     genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
     model = genai.GenerativeModel('gemini-1.5-flash')
+    print("Gemini model initialized successfully.")
 except Exception as e:
     print(f"Gemini API Key error: {e}")
     model = None
 
-# --- Helper Functions ---
+# --- Helper Functions & Routes ---
+# (The rest of the file is the same as the correct version from before)
+
 def get_user_id_from_token(request):
-    """Verifies Firebase ID token and returns UID."""
     id_token = request.headers.get('Authorization', '').split('Bearer ')[-1]
     if not id_token:
         return None, ({"error": "Authorization token not provided."}, 401)
@@ -45,18 +46,12 @@ def get_user_id_from_token(request):
     except Exception as e:
         return None, ({"error": f"Invalid token: {e}"}, 401)
 
-# --- API Endpoints ---
-
-# <<< --- THIS IS THE FIX --- >>>
-# The root route MUST serve your main application file.
 @app.route("/")
 def home():
-    """Serves the main index.html file."""
     return render_template("index.html")
 
 @app.route("/api/new-chat", methods=['POST'])
 def new_chat():
-    """Creates a new, empty chat document in Firestore for the user."""
     uid, error = get_user_id_from_token(request)
     if error: return jsonify(error[0]), error[1]
 
@@ -72,7 +67,6 @@ def new_chat():
 
 @app.route("/api/get-recent-chats", methods=['GET'])
 def get_recent_chats():
-    """Gets a list of all chats for the logged-in user."""
     uid, error = get_user_id_from_token(request)
     if error: return jsonify(error[0]), error[1]
     
@@ -82,7 +76,6 @@ def get_recent_chats():
 
 @app.route("/api/get-chat/<chat_id>", methods=['GET'])
 def get_chat(chat_id):
-    """Gets the full message history for a specific chat."""
     uid, error = get_user_id_from_token(request)
     if error: return jsonify(error[0]), error[1]
 
@@ -96,7 +89,6 @@ def get_chat(chat_id):
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
-    """Handles sending a message to a specific chat."""
     uid, error = get_user_id_from_token(request)
     if error: return jsonify(error[0]), error[1]
 
@@ -113,7 +105,6 @@ def chat():
     if not chat_doc.exists or chat_doc.to_dict().get('userId') != uid:
         return jsonify({"error": "Chat not found or access denied"}), 404
 
-    # The actual API call logic can be expanded here with different system prompts
     prompt = f"User asks: {user_message}"
     try:
         response = model.generate_content(prompt)
@@ -136,6 +127,3 @@ def chat():
         return jsonify({"response": bot_response})
     except Exception as e:
         return jsonify({"error": f"An error occurred: {e}"}), 500
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
