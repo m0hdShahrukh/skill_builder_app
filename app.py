@@ -1,33 +1,32 @@
-import google.generativeai as genai
-from flask import Flask, request
-
-# Put your magic key here
 import os
+import google.generativeai as genai
+# We need to add render_template to show the HTML page
+from flask import Flask, request, render_template
+
+# Your secret key is now read from the hosting environment
 genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
 
-# This is the robot's brain model
 model = genai.GenerativeModel('gemini-pro')
-
-# This creates the robot's body (the Flask app)
 app = Flask(__name__)
 
-# This tells the robot what to do when it gets a message
+# This is the NEW part that shows your website's front page
+@app.route("/")
+def home():
+    # This tells Flask to find and show your index.html file
+    return render_template("index.html")
+
 @app.route("/chat", methods=["POST"])
 def chat():
-    # Get the message from the user
     user_message = request.json["message"]
 
-    # The robot's personality and instructions
-    # We start a new chat each time for this simple version
+    # You can simplify the prompt a bit
     chat_session = model.start_chat(history=[])
     prompt = f"""
-    You are a friendly and encouraging 'Skill Builder' coach.
-    Your goal is to help a user learn a new skill.
-    The user said: "{user_message}"
-    Based on their message, ask what they want to learn or give them the very first, simple step.
-    Keep your instructions small and easy.
+    You are a friendly 'Skill Builder' coach. The user wants to learn a skill.
+    The user just said: "{user_message}"
+    Your job is to provide the very next, single, simple step for them.
+    Keep your instructions small and encouraging. End by asking them to let you know when they have completed the step.
     """
     response = chat_session.send_message(prompt)
 
-    # Send the robot's answer back
     return {"response": response.text}
