@@ -10,6 +10,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
+        /* All of your CSS from the previous step goes here */
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
         body {
@@ -107,6 +108,7 @@
             cursor: pointer;
             font-size: 1em;
             margin-bottom: 1em;
+            width: 100%;
         }
 
         #sidebar h2 {
@@ -201,7 +203,8 @@
             line-height: 1.6;
         }
 
-        .message p:first-child {
+        .message p:first-child,
+        .message h1:first-child {
             margin-top: 0;
         }
 
@@ -260,6 +263,22 @@
 <body>
 
     <div id="auth-container">
+        <div id="login-form">
+            <h2>Login</h2>
+            <div class="input-group"><input type="email" id="login-email" placeholder="Email"></div>
+            <div class="input-group"><input type="password" id="login-password" placeholder="Password"></div>
+            <button id="login-btn" class="auth-btn">Login</button>
+            <p id="auth-error" class="hidden"></p>
+            <p class="toggle-auth" onclick="toggleAuthForms()">Don't have an account? Sign Up</p>
+        </div>
+        <div id="signup-form" class="hidden">
+            <h2>Sign Up</h2>
+            <div class="input-group"><input type="email" id="signup-email" placeholder="Email"></div>
+            <div class="input-group"><input type="password" id="signup-password"
+                    placeholder="Password (min. 6 characters)"></div>
+            <button id="signup-btn" class="auth-btn">Sign Up</button>
+            <p class="toggle-auth" onclick="toggleAuthForms()">Already have an account? Login</p>
+        </div>
     </div>
 
     <div id="main-app" class="hidden">
@@ -299,8 +318,7 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
-        // --- DOM ELEMENTS (THIS SECTION WAS MISSING) ---
-        // This is the fix for the frontend bug.
+        // --- DOM ELEMENTS ---
         const authContainer = document.getElementById('auth-container');
         const mainApp = document.getElementById('main-app');
         const loginForm = document.getElementById('login-form');
@@ -312,6 +330,8 @@
         const newChatBtn = document.getElementById('new-chat-btn');
         const recentChatsList = document.getElementById('recent-chats-list');
         const logoutBtn = document.getElementById('logout-btn');
+        const loginBtn = document.getElementById('login-btn');
+        const signupBtn = document.getElementById('signup-btn');
 
         // --- GLOBAL STATE ---
         let currentChatId = null;
@@ -328,29 +348,52 @@
             }
         });
 
-        // --- ALL OTHER JS FUNCTIONS FROM PREVIOUS STEP ---
-        // (toggleAuthForms, login/signup listeners, loadRecentChats, loadChat, createNewChat, sendMessage, etc.)
-        // Ensure the full JavaScript from the previous correct version is here.
-        // For clarity, here is the full script again:
+        // --- AUTH FUNCTIONS ---
+        function toggleAuthForms() {
+            loginForm.classList.toggle('hidden');
+            signupForm.classList.toggle('hidden');
+            authError.textContent = '';
+            authError.classList.add('hidden');
+        }
 
-        function toggleAuthForms() { /* ... function code ... */ }
-        document.getElementById('signup-btn').addEventListener('click', () => { /* ... */ });
-        document.getElementById('login-btn').addEventListener('click', () => { /* ... */ });
+        signupBtn.addEventListener('click', () => {
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            auth.createUserWithEmailAndPassword(email, password).catch(error => {
+                authError.textContent = error.message;
+                authError.classList.remove('hidden');
+            });
+        });
+
+        loginBtn.addEventListener('click', () => {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            auth.signInWithEmailAndPassword(email, password).catch(error => {
+                authError.textContent = error.message;
+                authError.classList.remove('hidden');
+            });
+        });
+
         logoutBtn.addEventListener('click', () => auth.signOut());
 
+        // --- CHAT FUNCTIONS ---
         async function loadRecentChats() {
             if (!auth.currentUser) return;
             const token = await auth.currentUser.getIdToken();
-            const response = await fetch('/api/get-recent-chats', { headers: { 'Authorization': `Bearer ${token}` } });
-            const chats = await response.json();
-            recentChatsList.innerHTML = '';
-            chats.forEach(chat => {
-                const li = document.createElement('li');
-                li.textContent = chat.title;
-                li.dataset.chatId = chat.id;
-                if (chat.id === currentChatId) li.classList.add('active');
-                recentChatsList.appendChild(li);
-            });
+            try {
+                const response = await fetch('/api/get-recent-chats', { headers: { 'Authorization': `Bearer ${token}` } });
+                const chats = await response.json();
+                recentChatsList.innerHTML = '';
+                if (Array.isArray(chats)) {
+                    chats.forEach(chat => {
+                        const li = document.createElement('li');
+                        li.textContent = chat.title;
+                        li.dataset.chatId = chat.id;
+                        if (chat.id === currentChatId) li.classList.add('active');
+                        recentChatsList.appendChild(li);
+                    });
+                }
+            } catch (e) { console.error("Could not load recent chats", e); }
         }
 
         async function loadChat(chatId) {
@@ -359,9 +402,11 @@
             const response = await fetch(`/api/get-chat/${chatId}`, { headers: { 'Authorization': `Bearer ${token}` } });
             const chatData = await response.json();
             chatbox.innerHTML = '';
-            chatData.messages.forEach(msg => {
-                appendMessage(msg.text, msg.role === 'user' ? 'user-message' : 'bot-message', false);
-            });
+            if (chatData && chatData.messages) {
+                chatData.messages.forEach(msg => {
+                    appendMessage(msg.text, msg.role === 'user' ? 'user-message' : 'bot-message', false);
+                });
+            }
             currentChatId = chatId;
             document.querySelectorAll('#recent-chats-list li').forEach(li => {
                 li.classList.toggle('active', li.dataset.chatId === chatId);
@@ -383,8 +428,9 @@
 
         async function sendMessage() {
             const messageText = userInput.value;
-            if (!messageText.trim() || !currentChatId || !auth.currentUser) {
-                if (!currentChatId) alert("Please select a chat or start a new one.");
+            if (!messageText.trim() || !auth.currentUser) return;
+            if (!currentChatId) {
+                alert("Please select a chat or start a new one first.");
                 return;
             }
             if (chatbox.querySelector('p')) chatbox.innerHTML = '';
@@ -399,7 +445,6 @@
             });
             const data = await response.json();
             appendMessage(data.response, 'bot-message', true);
-            // Auto-refresh title after first message
             if (chatbox.querySelectorAll('.message-wrapper').length <= 2) {
                 loadRecentChats();
             }
@@ -414,7 +459,6 @@
             wrapper.appendChild(messageDiv);
             chatbox.appendChild(wrapper);
             if (shouldScroll) chatbox.scrollTop = chatbox.scrollHeight;
-            return messageDiv;
         }
 
         sendButton.addEventListener('click', sendMessage);
