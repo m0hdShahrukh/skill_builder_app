@@ -1,9 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Suite</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    </head>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+        body { font-family: 'Roboto', sans-serif; margin: 0; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .hidden { display: none !important; }
+
+        /* Login Form Styles */
+        #auth-container { width: 100%; max-width: 400px; padding: 2em; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        #auth-container h2 { text-align: center; color: #333; margin-top: 0; }
+        .input-group { margin-bottom: 1.5em; }
+        .input-group input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+        .auth-btn { width: 100%; padding: 12px; border: none; background: #007bff; color: white; border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: 500;}
+        .toggle-auth { text-align: center; margin-top: 1em; color: #007bff; cursor: pointer; font-size: 0.9em;}
+        #auth-error { color: red; text-align: center; margin-top: 1em; font-size: 0.9em; min-height: 1.2em; }
+
+        /* Main App Styles */
+        #main-app { display: flex; width: 95vw; height: 95vh; max-width: 1400px; }
+        #sidebar { width: 260px; background: #f8f9fa; border-right: 1px solid #ddd; display: flex; flex-direction: column; padding: 1em; box-sizing: border-box;}
+        #sidebar h2 { border-bottom: 1px solid #ccc; padding-bottom: 0.5em; font-size: 1.2em; color: #333; }
+        #logout-btn { width: 100%; padding: 12px; border: none; background: #6c757d; color: white; border-radius: 8px; cursor: pointer; font-size: 1em; margin-top: auto;}
+
+        /* Chat Container Styles */
+        #chat-container { flex-grow: 1; display: flex; flex-direction: column; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden; margin-left: 1em;}
+        #header { display: flex; justify-content: space-between; align-items: center; background: #007bff; color: white; padding: 12px 20px; }
+        #header h1 { font-size: 1.3em; margin: 0; font-weight: 700; }
+        #chatbox { flex-grow: 1; overflow-y: auto; padding: 20px; }
+        .message-wrapper { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+        .message { padding: 12px 18px; border-radius: 18px; max-width: 80%; line-height: 1.6; }
+        .message h1, .message h2, .message h3 { margin-top: 0; }
+        .message ul, .message ol { padding-left: 20px; margin: 0.5em 0; }
+        .message p { margin: 0.5em 0; }
+        .user-message { background-color: #007bff; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+        .bot-message { background-color: #e9e9eb; color: #333; align-self: flex-start; border-bottom-left-radius: 4px; position: relative;}
+        .copy-btn { position: absolute; top: 8px; right: 8px; background: #cccccc99; border: none; border-radius: 4px; cursor: pointer; opacity: 0; transition: opacity 0.2s; padding: 4px;}
+        .message-wrapper:hover .copy-btn { opacity: 1; }
+        #input-container { display: flex; padding: 16px; border-top: 1px solid #ddd; }
+        #userInput { flex-grow: 1; border: 1px solid #ccc; border-radius: 20px; padding: 12px 18px; font-size: 1em; margin-right: 10px; }
+        #userInput:focus { outline: none; border-color: #007bff; }
+        #sendButton { background-color: #007bff; color: white; border: none; border-radius: 50%; width: 48px; height: 48px; font-size: 1.8em; cursor: pointer; display: flex; justify-content: center; align-items: center;}
+    </style>
+</head>
 <body>
+
+    <div id="auth-container">
+        <div id="login-form">
+            <h2>Login</h2>
+            <div class="input-group"><input type="email" id="login-email" placeholder="Email"></div>
+            <div class="input-group"><input type="password" id="login-password" placeholder="Password"></div>
+            <button id="login-btn" class="auth-btn">Login</button>
+            <p id="auth-error" class="hidden"></p>
+            <p class="toggle-auth" onclick="toggleAuthForms()">Don't have an account? Sign Up</p>
+        </div>
+        <div id="signup-form" class="hidden">
+            <h2>Sign Up</h2>
+            <div class="input-group"><input type="email" id="signup-email" placeholder="Email"></div>
+            <div class="input-group"><input type="password" id="signup-password" placeholder="Password (min. 6 characters)"></div>
+            <button id="signup-btn" class="auth-btn">Sign Up</button>
+            <p class="toggle-auth" onclick="toggleAuthForms()">Already have an account? Login</p>
+        </div>
+    </div>
+
+    <div id="main-app" class="hidden">
+        <div id="sidebar">
+            <h2>AI Models</h2>
+            <hr>
+            <h2>Recent Chats</h2>
+            <button id="logout-btn">Logout</button>
+        </div>
+        <div id="chat-container">
+            <div id="header"><h1>How-To Expert</h1></div>
+            <div id="chatbox"></div>
+            <div id="input-container">
+                <input type="text" id="userInput" placeholder="Ask me how to do anything...">
+                <button id="sendButton">➤</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // --- FIREBASE SETUP ---
         const firebaseConfig = {
@@ -15,90 +98,141 @@
             appId: "1:381525150560:web:a03a5f85bac184236d6c05",
             measurementId: "G-2PFEW30KN6"
         };
+        // This line fixes the 'firebase is not defined' error
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
-        const db = firebase.firestore(); // Initialize Firestore
+        const db = firebase.firestore();
 
-        // --- DOM ELEMENTS --- (from before)
-
+        // --- DOM ELEMENTS ---
+        const authContainer = document.getElementById('auth-container');
+        const mainApp = document.getElementById('main-app');
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+        const authError = document.getElementById('auth-error');
+        const chatbox = document.getElementById('chatbox');
+        const userInput = document.getElementById('userInput');
+        
         // --- AUTH STATE LISTENER ---
         auth.onAuthStateChanged(user => {
             if (user) {
                 authContainer.classList.add('hidden');
                 mainApp.classList.remove('hidden');
-                loadChatHistory(); // Load history on login
+                loadChatHistory();
             } else {
                 authContainer.classList.remove('hidden');
                 mainApp.classList.add('hidden');
             }
         });
+        
+        // --- AUTH FUNCTIONS ---
+        function toggleAuthForms() {
+            loginForm.classList.toggle('hidden');
+            signupForm.classList.toggle('hidden');
+            authError.classList.add('hidden');
+        }
 
-        // --- NEW: Function to load history ---
+        document.getElementById('signup-btn').addEventListener('click', () => {
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            auth.createUserWithEmailAndPassword(email, password).catch(error => {
+                authError.textContent = error.message;
+                authError.classList.remove('hidden');
+            });
+        });
+
+        document.getElementById('login-btn').addEventListener('click', () => {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            auth.signInWithEmailAndPassword(email, password).catch(error => {
+                authError.textContent = error.message;
+                authError.classList.remove('hidden');
+            });
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            auth.signOut();
+        });
+
+        // --- CHAT FUNCTIONS ---
         async function loadChatHistory() {
-            chatbox.innerHTML = ''; // Clear the chatbox first
+            chatbox.innerHTML = '';
+            if (!auth.currentUser) return;
+            
             const token = await auth.currentUser.getIdToken();
             try {
                 const response = await fetch('/get-history', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await response.json();
-                if (data.history) {
+                if (data.history && Array.isArray(data.history)) {
                     data.history.forEach(msg => {
                         const className = msg.role === 'user' ? 'user-message' : 'bot-message';
-                        const messageDiv = appendMessage(msg.text, className);
-                        if (className === 'bot-message') {
-                            addCopyButton(messageDiv);
-                        }
+                        const messageDiv = appendMessage(msg.text, className, false);
+                        if (className === 'bot-message') addCopyButton(messageDiv);
                     });
                 }
-            } catch (error) {
-                console.error('Failed to load history:', error);
-            }
+            } catch (error) { console.error('Failed to load history:', error); }
         }
         
-        // --- UPDATED: sendMessage function ---
-        async function sendMessage(messageText) {
-            if (!messageText || messageText.trim() === '') return;
-            appendMessage(messageText, 'user-message');
+        async function sendMessage() {
+            const messageText = userInput.value;
+            if (!messageText.trim() || !auth.currentUser) return;
+            appendMessage(messageText, 'user-message', true);
             userInput.value = '';
             
-            const token = await auth.currentUser.getIdToken(); // Get auth token
+            const token = await auth.currentUser.getIdToken();
 
             try {
                 const response = await fetch('/chat', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}` // Send token for verification
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify({ message: messageText })
                 });
                 if (!response.ok) throw new Error(`Server error: ${response.status}`);
                 const data = await response.json();
-                
-                const botMessageDiv = appendMessage(data.response, 'bot-message');
+                const botMessageDiv = appendMessage(data.response, 'bot-message', true);
                 addCopyButton(botMessageDiv);
             } catch (error) {
-                appendMessage("Oops! Something went wrong.", 'bot-message');
+                appendMessage("Oops! Something went wrong. Please try again.", 'bot-message', true);
                 console.error("Error:", error);
             }
         }
 
-        function appendMessage(text, className) {
-            // ... same appendMessage function as before ...
+        function appendMessage(text, className, shouldScroll) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'message-wrapper';
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', className);
+            messageDiv.innerHTML = marked.parse(text);
+            wrapper.appendChild(messageDiv);
+            chatbox.appendChild(wrapper);
+            if (shouldScroll) chatbox.scrollTop = chatbox.scrollHeight;
+            return messageDiv;
         }
+        
         function addCopyButton(botMessageElement) {
-            // ... same addCopyButton function as before ...
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-btn';
+            copyBtn.innerHTML = '📋';
+            copyBtn.title = 'Copy to clipboard';
+            copyBtn.onclick = () => {
+                navigator.clipboard.writeText(botMessageElement.innerText);
+                copyBtn.innerHTML = '✅';
+                setTimeout(() => { copyBtn.innerHTML = '📋'; }, 2000);
+            };
+            botMessageElement.parentNode.insertBefore(copyBtn, botMessageElement.nextSibling);
         }
 
-        // --- UPDATED: newChatBtn listener ---
-        newChatBtn.addEventListener('click', async () => {
+        document.getElementById('sendButton').addEventListener('click', sendMessage);
+        document.getElementById('userInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+        document.getElementById('new-chat-btn')?.addEventListener('click', async () => {
+            if(!auth.currentUser) return;
             const token = await auth.currentUser.getIdToken();
             await fetch('/new-chat', { headers: { 'Authorization': `Bearer ${token}` } });
-            chatbox.innerHTML = ''; // Visually clear the chat
+            chatbox.innerHTML = '';
         });
-        
-        // ... all other listeners and functions from before ...
     </script>
 </body>
 </html>
