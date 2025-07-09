@@ -6,7 +6,7 @@ from flask import Flask, request, jsonify, render_template
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
 from datetime import datetime, timezone
-
+# Triggering a new deploy
 # --- Initialization ---
 app = Flask(__name__)
 app_secret_key = os.environ.get('SECRET_KEY')
